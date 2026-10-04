@@ -14,7 +14,7 @@
 
 ## What is this?
 
-**Turbo ControlNet Engine** is a lightweight Streamlit front-end for a local **ComfyUI ControlNet workflow** based on **Z-Image-Turbo + Qwen**.
+**Turbo ControlNet Engine** is a local **ComfyUI ControlNet workflow** based on **Z-Image-Turbo + Qwen** with preprocessors and Streamlit front-end .
 
 You provide:
 
