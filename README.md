@@ -126,83 +126,36 @@ The canvas is organized into five labeled groups that run left to right:
 | Step 4 — Sampling & decoding | Denoises in two hand-off stages, then decodes to pixels |
 | Step 5 — Filters & editing (optional) | Post-processing, disabled by default — safe to ignore or delete |
 
-### Node-level data flow
+### How the pieces flow together
+
+One big-picture view: the preprocessor supplies structure, CLIP supplies meaning, the diffusion model supplies the imagery, the KSampler brings them together on a latent canvas, and the VAE turns the result into pixels.
 
 ```mermaid
-flowchart TD
-    subgraph S1["Step 1 - Load models & ControlNet"]
-        UNET["46 UNETLoader<br/>z_image_turbo_bf16"]
-        AURA["47 ModelSamplingAuraFlow<br/>shift 7"]
-        CLIPL["39 CLIPLoader<br/>qwen_3_4b"]
-        VAEL["40 VAELoader<br/>ae"]
-        MPATCH["48 ModelPatchLoader<br/>ControlNet Union"]
-        QCTRL["49 Qwen DiffSynth ControlNet<br/>strength 1"]
-        UNET --> AURA --> QCTRL
-        MPATCH --> QCTRL
-        VAEL --> QCTRL
-    end
-    subgraph S2["Step 2 - Reference image"]
-        LOAD["50 LoadImage<br/>reference"]
-        AIO["56 AIO Preprocessor<br/>resolution 1024"]
-        PREV["57 PreviewImage<br/>live structure map"]
-        LOAD --> AIO --> PREV
-        AIO --> QCTRL
-    end
-    subgraph S3["Step 3 - Size & prompt"]
-        GETR["62 Get resolution<br/>from reference"]
-        LAT["41 EmptySD3LatentImage<br/>batch 1"]
-        PROMPT["45 CLIP Text Encode<br/>prompt"]
-        NEG["42 ConditioningZeroOut<br/>negative"]
-        LOAD --> GETR --> LAT
-        CLIPL --> PROMPT
-        PROMPT --> NEG
-    end
-    subgraph S4["Step 4 - Sampling & decoding"]
-        K1["67 KSampler stage 1<br/>steps 0 to 8"]
-        K2["68 KSampler stage 2<br/>steps 8 onward"]
-        DEC["43 VAE Decode"]
-        SAVE["9 SaveImage<br/>turbo per run"]
-        QCTRL --> K1 --> K2 --> DEC --> SAVE
-        VAEL --> DEC
-        PROMPT --> K1
-        PROMPT --> K2
-        NEG --> K1
-        NEG --> K2
-        LAT --> K1
-    end
-    subgraph S5["Step 5 - Filters, optional"]
-        FILT["post-process node<br/>disabled by default"]
-        DEC -.-> FILT
-    end
-```
+flowchart TB
+    REF["Reference image"]
+    PRE["Preprocessor<br/>Canny / Depth / Pose"]
+    SMAP["Structure map"]
+    PRMPT["Prompt"]
+    CLIPX["CLIP text encoder<br/>Qwen"]
+    COND["Conditioning"]
+    UNETX["Diffusion model<br/>Z-Image-Turbo"]
+    CNET["ControlNet patch<br/>Union"]
+    GMODEL["Guided model"]
+    LATENT["Latent canvas<br/>sized from reference"]
+    KSAMP["KSampler<br/>two-stage denoise"]
+    VAED["VAE decoder"]
+    FINAL["Final image"]
 
-### Mind map
+    REF --> PRE --> SMAP --> GMODEL
+    PRMPT --> CLIPX --> COND --> KSAMP
+    UNETX --> GMODEL
+    CNET --> GMODEL
+    GMODEL --> KSAMP
+    LATENT --> KSAMP
+    KSAMP --> VAED --> FINAL
 
-```mermaid
-mindmap
-  root((Turbo ControlNet Engine))
-    Step 1 Models
-      Diffusion model Z-Image-Turbo
-      Qwen text encoder
-      VAE decoder
-      ControlNet Union patch
-      AuraFlow shift tuning
-    Step 2 Reference
-      Load reference image
-      AIO structure preprocessor
-      Live preview checkpoint
-    Step 3 Prompt and size
-      Auto resolution detect
-      Empty latent canvas
-      Prompt encoding
-      Zeroed negative conditioning
-    Step 4 Sampling
-      Stage one sampler
-      Stage two sampler
-      VAE decode to pixels
-      Save final image
-    Step 5 Optional
-      Post filters off by default
+    classDef big fill:#1b2440,stroke:#8b7cff,stroke-width:2px,color:#f1f5f9;
+    class GMODEL,KSAMP big;
 ```
 
 ### Step-by-step walkthrough
