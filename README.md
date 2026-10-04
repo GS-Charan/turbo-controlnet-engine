@@ -105,7 +105,142 @@ The bundled `workflow.json` is the source of truth. The app only rewrites these 
 | `9 SaveImage` | Output naming | Unique `turbo/<run_id>` prefix |
 | `57 PreviewImage` | Live structure preview | Read back through WebSocket + `/view` |
 
-All model, sampler, ControlNet, and resolution settings remain exactly as defined in your ComfyUI graph.
+All model, sampler, ControlNet, and resolution settings remain exactly as defined in your ComfyUI graph. The full graph is documented in the next section.
+
+---
+
+## The ComfyUI workflow — the core of this project
+
+The Streamlit app is a remote control. The actual image-making happens in the ComfyUI graph below, which is versioned in this repo as `workflow.json`. Understanding it is what lets you art-direct results instead of re-rolling blindly.
+
+![ComfyUI workflow graph](docs/images/comfyui-workflow.png)
+<!-- Save the attached ComfyUI screenshot as: docs/images/comfyui-workflow.png -->
+
+The canvas is organized into five labeled groups that run left to right:
+
+| Group | Role in one sentence |
+|---|---|
+| Step 1 — Load models & Preprocessors | Loads the diffusion model, text encoder, VAE, ControlNet patch, and fuses them into one guided model |
+| Step 2 — Add reference image | Loads your reference, extracts its structure map, and shows the live preview |
+| Step 3 — Image size & prompt | Sizes the latent canvas from the reference and encodes your creative direction |
+| Step 4 — Sampling & decoding | Denoises in two hand-off stages, then decodes to pixels |
+| Step 5 — Filters & editing (optional) | Post-processing, disabled by default — safe to ignore or delete |
+
+### Node-level data flow
+
+```mermaid
+flowchart TD
+    subgraph S1["Step 1 - Load models & ControlNet"]
+        UNET["46 UNETLoader<br/>z_image_turbo_bf16"]
+        AURA["47 ModelSamplingAuraFlow<br/>shift 7"]
+        CLIPL["39 CLIPLoader<br/>qwen_3_4b"]
+        VAEL["40 VAELoader<br/>ae"]
+        MPATCH["48 ModelPatchLoader<br/>ControlNet Union"]
+        QCTRL["49 Qwen DiffSynth ControlNet<br/>strength 1"]
+        UNET --> AURA --> QCTRL
+        MPATCH --> QCTRL
+        VAEL --> QCTRL
+    end
+    subgraph S2["Step 2 - Reference image"]
+        LOAD["50 LoadImage<br/>reference"]
+        AIO["56 AIO Preprocessor<br/>resolution 1024"]
+        PREV["57 PreviewImage<br/>live structure map"]
+        LOAD --> AIO --> PREV
+        AIO --> QCTRL
+    end
+    subgraph S3["Step 3 - Size & prompt"]
+        GETR["62 Get resolution<br/>from reference"]
+        LAT["41 EmptySD3LatentImage<br/>batch 1"]
+        PROMPT["45 CLIP Text Encode<br/>prompt"]
+        NEG["42 ConditioningZeroOut<br/>negative"]
+        LOAD --> GETR --> LAT
+        CLIPL --> PROMPT
+        PROMPT --> NEG
+    end
+    subgraph S4["Step 4 - Sampling & decoding"]
+        K1["67 KSampler stage 1<br/>steps 0 to 8"]
+        K2["68 KSampler stage 2<br/>steps 8 onward"]
+        DEC["43 VAE Decode"]
+        SAVE["9 SaveImage<br/>turbo per run"]
+        QCTRL --> K1 --> K2 --> DEC --> SAVE
+        VAEL --> DEC
+        PROMPT --> K1
+        PROMPT --> K2
+        NEG --> K1
+        NEG --> K2
+        LAT --> K1
+    end
+    subgraph S5["Step 5 - Filters, optional"]
+        FILT["post-process node<br/>disabled by default"]
+        DEC -.-> FILT
+    end
+```
+
+### Mind map
+
+```mermaid
+mindmap
+  root((Turbo ControlNet Engine))
+    Step 1 Models
+      Diffusion model Z-Image-Turbo
+      Qwen text encoder
+      VAE decoder
+      ControlNet Union patch
+      AuraFlow shift tuning
+    Step 2 Reference
+      Load reference image
+      AIO structure preprocessor
+      Live preview checkpoint
+    Step 3 Prompt and size
+      Auto resolution detect
+      Empty latent canvas
+      Prompt encoding
+      Zeroed negative conditioning
+    Step 4 Sampling
+      Stage one sampler
+      Stage two sampler
+      VAE decode to pixels
+      Save final image
+    Step 5 Optional
+      Post filters off by default
+```
+
+### Step-by-step walkthrough
+
+**Step 1 — Load models & Preprocessors (nodes 46, 47, 39, 40, 48, 49).**
+Four loaders bring in the four model files (table below). `ModelSamplingAuraFlow` (node 47, shift 7) tunes the flow-matching schedule for Z-Image-Turbo. Then `QwenImageDiffsynthControlnet` (node 49, strength 1) fuses the diffusion model, the ControlNet Union patch, the VAE, and the preprocessor's structure image into a single guided model. Everything downstream samples from this fused model — this is where "control" physically enters the generation.
+
+**Step 2 — Add reference image (nodes 50, 56, 57).**
+`LoadImage` (node 50) reads the reference the app uploaded. `AIO_Preprocessor` (node 56, resolution 1024) converts it into a structure map using whichever preprocessor you picked — Canny edges, DepthAnything depth, or OpenPose skeleton. That map feeds the ControlNet input of node 49, and `PreviewImage` (node 57) exposes the same map so the app can show it live. This preview is your art-director checkpoint: if the structure looks wrong here, fix the reference instead of burning sampling time.
+
+**Step 3 — Image size & prompt (nodes 62, 41, 45, 42).**
+`Get resolution` (node 62) reads the reference dimensions and drives `EmptySD3LatentImage` (node 41), so the output canvas matches your reference's aspect ratio automatically. `CLIP Text Encode` (node 45) turns your prompt into positive conditioning via the Qwen encoder, and `ConditioningZeroOut` (node 42) derives the negative conditioning from it. Per the note on the canvas, there is effectively no negative prompt at CFG 1.0 — adding a real negative requires a full CLIP setup and CFG above 1.0.
+
+**Step 4 — Sampling & decoding (nodes 67, 68, 43, 9).**
+Two `KSamplerAdvanced` nodes split denoising into a hand-off: stage 1 (node 67) runs steps 0→8 laying in composition, stage 2 (node 68) continues from step 8 to finish detail. Both use euler / sgm_uniform at CFG 1. `VAEDecode` (node 43) converts the finished latent to pixels, and `SaveImage` (node 9) writes it under a unique per-run prefix the app later fetches. The two rules on the canvas are load-bearing: keep total steps identical on both samplers (16 and 16), and sampler 1's END step must equal sampler 2's START step (8 and 8).
+
+**Step 5 — Filters & editing, optional (disabled).**
+The red-boxed node is a private post-processing node that ships disabled — it contributes nothing to the API run. Tune it in the ComfyUI UI if you want it, or delete it; the workflow runs fine without it.
+
+### Model files and where they live
+
+Install these into your ComfyUI `models/` folders as shown in the graph's Model links note:
+
+| File | Loader node | ComfyUI folder |
+|---|---|---|
+| `qwen_3_4b.safetensors` | 39 CLIPLoader | `models/text_encoders/` |
+| `z_image_turbo_bf16.safetensors` | 46 UNETLoader | `models/diffusion_models/` |
+| `ae.safetensors` | 40 VAELoader | `models/vae/` |
+| `Z-Image-Turbo-Fun-Controlnet-Union.safetensors` | 48 ModelPatchLoader | `models/` ControlNet folder per the graph note |
+
+Required custom nodes: `comfyui_controlnet_aux` (AIO Preprocessor) and Crystools (Get resolution).
+
+### Rules to preserve when editing the graph
+
+- **Sampler hand-off:** total steps equal on nodes 67 and 68; node 67 `end_at_step` = node 68 `start_at_step`.
+- **Resolution:** `Get resolution` (node 62) auto-matches the reference; per the canvas tip you may delete it and type width/height into node 41 manually instead.
+- **CFG stays at 1:** the Turbo model is tuned for it; raising CFG without adding a real negative-prompt path degrades results.
+- **Preprocessor resolution 1024** on node 56 is the detail-vs-VRAM tradeoff; lower it if a weak GPU runs out of memory.
 
 ---
 
@@ -262,6 +397,7 @@ Drop files into `docs/images/` using these exact names:
 ```text
 docs/images/hero.png
 docs/images/ui-overview.png
+docs/images/comfyui-workflow.png
 docs/images/example-reference.png
 docs/images/example-canny-preview.png
 docs/images/example-canny-final.png
