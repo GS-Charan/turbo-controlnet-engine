@@ -1,0 +1,19 @@
+{
+  "9": {"inputs": {"filename_prefix": "z-image", "images": ["43", 0]}, "class_type": "SaveImage", "_meta": {"title": "Save Image"}},
+  "39": {"inputs": {"clip_name": "qwen_3_4b.safetensors", "type": "lumina2", "device": "default"}, "class_type": "CLIPLoader", "_meta": {"title": "Load CLIP"}},
+  "40": {"inputs": {"vae_name": "ae.safetensors"}, "class_type": "VAELoader", "_meta": {"title": "Load VAE"}},
+  "41": {"inputs": {"width": ["62", 0], "height": ["62", 1], "batch_size": 1}, "class_type": "EmptySD3LatentImage", "_meta": {"title": "EmptySD3LatentImage"}},
+  "42": {"inputs": {"conditioning": ["45", 0]}, "class_type": "ConditioningZeroOut", "_meta": {"title": "Conditioning Zero Out"}},
+  "43": {"inputs": {"samples": ["68", 0], "vae": ["40", 0]}, "class_type": "VAEDecode", "_meta": {"title": "VAE Decode"}},
+  "45": {"inputs": {"text": "", "clip": ["39", 0]}, "class_type": "CLIPTextEncode", "_meta": {"title": "CLIP Text Encode (Prompt)"}},
+  "46": {"inputs": {"unet_name": "z_image_turbo_bf16.safetensors", "weight_dtype": "default"}, "class_type": "UNETLoader", "_meta": {"title": "Load Diffusion Model"}},
+  "47": {"inputs": {"shift": 7, "sampling": "flow", "model": ["46", 0]}, "class_type": "ModelSamplingAuraFlow", "_meta": {"title": "ModelSamplingAuraFlow"}},
+  "48": {"inputs": {"name": "Z-Image-Turbo-Fun-Controlnet-Union.safetensors"}, "class_type": "ModelPatchLoader", "_meta": {"title": "Load Model Patch"}},
+  "49": {"inputs": {"strength": 1, "model": ["47", 0], "model_patch": ["48", 0], "vae": ["40", 0], "image": ["56", 0]}, "class_type": "QwenImageDiffsynthControlnet", "_meta": {"title": "Apply Qwen Image DiffSynth ControlNet"}},
+  "50": {"inputs": {"image": "PoseMy.Art (1).png"}, "class_type": "LoadImage", "_meta": {"title": "Load Image"}},
+  "56": {"inputs": {"preprocessor": "CannyEdgePreprocessor", "resolution": 1024, "image": ["50", 0]}, "class_type": "AIO_Preprocessor", "_meta": {"title": "AIO Aux Preprocessor"}},
+  "57": {"inputs": {"images": ["56", 0]}, "class_type": "PreviewImage", "_meta": {"title": "Preview depth map"}},
+  "62": {"inputs": {"image": ["50", 0]}, "class_type": "Get resolution [Crystools]", "_meta": {"title": "Get resolution"}},
+  "67": {"inputs": {"add_noise": "enable", "noise_seed": 271180079377955, "steps": 16, "cfg": 1, "sampler_name": "euler", "scheduler": "sgm_uniform", "start_at_step": 0, "end_at_step": 8, "return_with_leftover_noise": "disable", "model": ["49", 0], "positive": ["45", 0], "negative": ["42", 0], "latent_image": ["41", 0]}, "class_type": "KSamplerAdvanced", "_meta": {"title": "KSampler (Advanced)"}},
+  "68": {"inputs": {"add_noise": "enable", "noise_seed": 722520811297896, "steps": 16, "cfg": 1, "sampler_name": "euler", "scheduler": "sgm_uniform", "start_at_step": 8, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": ["49", 0], "positive": ["45", 0], "negative": ["42", 0], "latent_image": ["67", 0]}, "class_type": "KSamplerAdvanced", "_meta": {"title": "KSampler (Advanced)"}}
+}
