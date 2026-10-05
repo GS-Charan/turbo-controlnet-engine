@@ -2,7 +2,7 @@
 
 > Turn a rough reference image + a creative prompt into a controlled, client-ready visual — with live ControlNet structure previews.
 
-![Turbo ControlNet Engine hero](docs/images/hero.png)
+
 <!-- Attach your UI screenshot as: docs/images/hero.png -->
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue)](https://www.python.org/)
