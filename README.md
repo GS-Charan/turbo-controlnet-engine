@@ -343,63 +343,7 @@ C:\Games\turbo-controlnet-engine
 
 ---
 
-## Adding your images
 
-Drop files into `docs/images/` using these exact names:
-
-```text
-docs/images/hero.png
-docs/images/ui-overview.png
-docs/images/comfyui-workflow.png
-docs/images/example-reference.png
-docs/images/example-canny-preview.png
-docs/images/example-canny-final.png
-docs/images/example-depth-preview.png
-docs/images/example-depth-final.png
-docs/images/example-openpose-preview.png
-docs/images/example-openpose-final.png
-```
-
-Recommended export sizes:
-
-- UI screenshots: `1600px` wide
-- Reference and finals: original generation resolution
-- Previews: as returned by ComfyUI, no upscale needed
-
----
-
-## Customization
-
-- Change the default ComfyUI address in the sidebar or `DEFAULT_COMFY_URL` in `app.py`.
-- Change preprocessor resolution in `workflow.json`, node `56`, field `resolution`.
-- Change sampler steps, CFG, seed, or ControlNet strength in nodes `49`, `67`, and `68`.
-- Add more preprocessors by extending `PREPROCESSORS` in `app.py`.
-- The current workflow uses a two-stage `KSamplerAdvanced` pass for quality and control.
-
----
-
-## Troubleshooting
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| Cannot connect to ComfyUI | ComfyUI is not running | Start ComfyUI and verify `http://127.0.0.1:8188/system_stats` |
-| Missing model error | Required checkpoint, CLIP, VAE, or ControlNet not installed | Install the filenames listed in Technologies Used |
-| Missing node error | Custom node not installed | Install ControlNet Aux and Crystools, restart ComfyUI |
-| No preview appears | Proxy stripped binary WebSocket frames | The app already falls back to the `PreviewImage` node output; check ComfyUI logs |
-| Generation is slow | First run loads models | Keep ComfyUI warm; reduce preprocessor resolution or sampler steps |
-| Streamlit page is blank | Wrong Python environment | Activate `.venv` before running `streamlit run app.py` |
-
----
-
-## Roadmap ideas
-
-- Negative prompt and seed controls
-- Side-by-side comparison mode for all three preprocessors
-- Batch generation and contact-sheet export
-- Preset prompt library for automotive, fashion, F&B, and retail briefs
-- Automatic saving of reference + preview + final triples for client decks
-
----
 
 ## License
 
