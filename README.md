@@ -347,4 +347,4 @@ C:\Games\turbo-controlnet-engine
 
 ## License
 
-Internal creative-tooling project. Add your preferred license here before sharing outside your team.
+Internal creative-tooling project.
